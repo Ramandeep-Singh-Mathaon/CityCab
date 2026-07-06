@@ -1,0 +1,58 @@
+# ───────────────────────── Python ─────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.eggs/
+build/
+dist/
+
+# ─────────────────── Virtual environments ──────────────────
+venv/
+.venv/
+env/
+ENV/
+
+# ────────────────────── Secrets / env ──────────────────────
+.env
+.env.*
+!.env.example
+# legacy file: may contain plaintext credentials — never commit
+users.json
+
+# ─────────────────── Database / instance ───────────────────
+instance/
+*.db
+*.sqlite
+*.sqlite3
+
+# ────────────────── User-generated content ─────────────────
+static/uploads/
+static/avatars/
+
+# ───────────────────── Local data files ────────────────────
+bookings.xlsx
+*.xlsx
+
+# ────────────────── Legacy / unused assets ─────────────────
+# Old backgrounds replaced by the CSS/SVG glassmorphism theme
+static/background.jpg
+static/future_bg.jpg
+static/citycab_login_bg.png
+static/register_page_background.svg
+static/confirmation.svg
+
+# ─────────────────── Local helper scripts ──────────────────
+publish.ps1
+
+# ─────────────────── Scratch / experiments ─────────────────
+templates/hello.py
+templates/test.html
+templates/New folder/
+
+# ───────────────────── Editor / OS cruft ───────────────────
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db

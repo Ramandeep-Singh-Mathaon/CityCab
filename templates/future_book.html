@@ -1,0 +1,207 @@
+{% set title = "Schedule a ride · CityCab" %}
+{% extends "base.html" %}
+
+{% block head_extra %}
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+      integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+<style>
+  .book-grid { display: grid; grid-template-columns: 1.05fr 1fr; gap: 24px; align-items: stretch; }
+  @media (max-width: 900px) { .book-grid { grid-template-columns: 1fr; } }
+  .map-panel { position: relative; min-height: 460px; border-radius: var(--r-lg); overflow: hidden; border: 1px solid var(--glass-border); box-shadow: var(--shadow-lg); }
+  #map { width: 100%; height: 100%; min-height: 460px; background: #0d1230; z-index: 0; }
+  .leaflet-container { font-family: var(--font-body); }
+  .map-chip {
+    position: absolute; left: 16px; z-index: 500; display: inline-flex; align-items: center; gap: 8px;
+    padding: 10px 14px; border-radius: var(--r-md);
+    background: rgba(12,16,34,0.78); backdrop-filter: blur(12px);
+    border: 1px solid var(--glass-border); color: var(--ink); font-size: 13.5px; font-weight: 600; box-shadow: var(--shadow-md);
+  }
+  .map-chip svg { width: 16px; height: 16px; color: var(--accent-2); }
+  #chip-route { bottom: 66px; }
+  #chip-fare  { bottom: 16px; color: var(--amber); }
+  #chip-fare svg { color: var(--amber); }
+  input[type="date"], input[type="time"] { color-scheme: dark; }
+  .success-illu { width: 76px; height: 76px; margin: 0 auto 16px; border-radius: 50%; display: grid; place-items: center; background: linear-gradient(135deg,#34d399,#10b981); box-shadow: 0 12px 34px rgba(16,185,129,.4); }
+  .success-illu svg { width: 40px; height: 40px; color: #fff; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="fade-up">
+  <span class="eyebrow">📅 Scheduled ride</span>
+  <h1 class="title-xl mt-4">Schedule a ride</h1>
+  <p class="subtitle" style="margin-bottom: 24px;">Plan ahead — pick a date and time and we'll have a cab ready.</p>
+
+  <div class="book-grid">
+    <div class="card">
+      <form id="future-form" action="{{ url_for('future') }}" method="post">
+        <div class="field">
+          <label for="name">Your name</label>
+          <input class="input" type="text" id="name" name="name" placeholder="Full name" required>
+        </div>
+        <div class="row-2">
+          <div class="field">
+            <label for="pickup">Pickup</label>
+            <input class="input" type="text" id="pickup" name="pickup" placeholder="Pickup address" required autocomplete="off">
+          </div>
+          <div class="field">
+            <label for="drop">Drop</label>
+            <input class="input" type="text" id="drop" name="drop" placeholder="Drop address" required autocomplete="off">
+          </div>
+        </div>
+        <div class="row-2">
+          <div class="field">
+            <label for="date">Date</label>
+            <input class="input" type="date" id="date" name="date" required>
+          </div>
+          <div class="field">
+            <label for="time">Time</label>
+            <input class="input" type="time" id="time" name="time" required>
+          </div>
+        </div>
+
+        <input type="hidden" id="distance_km"  name="distance_km">
+        <input type="hidden" id="duration_min" name="duration_min">
+        <input type="hidden" id="fare"         name="fare">
+
+        <div class="flex gap-3 mt-5">
+          <button type="button" id="estimate-btn" class="btn btn-ghost btn-lg">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="11" r="9"/><path d="M9 11a3 3 0 1 0 6 0 3 3 0 0 0-6 0zM17.6 6.4 21 3"/></svg>
+            Estimate
+          </button>
+          <button type="button" onclick="bookRide()" class="btn btn-primary btn-lg" style="flex:1;">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18M9 16l2 2 4-4"/></svg>
+            Schedule ride
+          </button>
+        </div>
+        <p class="field-hint mt-4">Scheduled fare is estimated at a ₹50 base + ₹10/km.</p>
+      </form>
+    </div>
+
+    <div class="map-panel">
+      <div id="map"></div>
+      <div class="map-chip" id="chip-route">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19h16M4 19l4-14 4 6 3-4 5 12"/></svg>
+        <span>Distance <span id="distance-display">—</span> · <span id="duration-display">—</span></span>
+      </div>
+      <div class="map-chip" id="chip-fare">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v10M9.5 9.5h3.5a2 2 0 0 1 0 4H10"/></svg>
+        <span>Estimated fare: ₹<span id="fare-display">0</span></span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="confirm-modal">
+  <div class="modal-bg"></div>
+  <div class="card modal-card text-center fade-up">
+    <div class="success-illu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></div>
+    <h2 style="margin-bottom:6px;">Ride scheduled!</h2>
+    <p class="text-muted" style="margin:0;">Saving your booking…</p>
+  </div>
+</div>
+<audio id="confirmation-sound" preload="auto"><source src="{{ url_for('static', filename='confirmation.mp3') }}" type="audio/mpeg"></audio>
+<div class="overlay" id="loading-overlay"><div class="spinner spinner-lg"></div></div>
+{% endblock %}
+
+{% block script_extra %}
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+        integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<script>
+  let map, routeLayer, pickMarker, dropMarker;
+
+  function initMap() {
+    map = L.map('map', { zoomControl: true }).setView([28.6139, 77.2090], 11);
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+      maxZoom: 19, attribution: '&copy; OpenStreetMap &copy; CARTO'
+    }).addTo(map);
+    setTimeout(() => map.invalidateSize(), 200);
+  }
+
+  async function geocode(q) {
+    const url = 'https://nominatim.openstreetmap.org/search?format=json&limit=1&q=' + encodeURIComponent(q);
+    const r = await fetch(url, { headers: { 'Accept': 'application/json' } });
+    const d = await r.json();
+    if (!d.length) return null;
+    return { lat: parseFloat(d[0].lat), lon: parseFloat(d[0].lon) };
+  }
+
+  async function computeRoute() {
+    const o = document.getElementById('pickup').value.trim();
+    const d = document.getElementById('drop').value.trim();
+    if (!o || !d) return false;
+    const a = await geocode(o);
+    const b = await geocode(d);
+    if (!a || !b) { CityCab.toast('Could not find one of those locations. Try a more specific address.', 'danger'); return false; }
+
+    const routeUrl = `https://router.project-osrm.org/route/v1/driving/${a.lon},${a.lat};${b.lon},${b.lat}?overview=full&geometries=geojson`;
+    const res = await fetch(routeUrl);
+    const j = await res.json();
+    if (j.code !== 'Ok' || !j.routes || !j.routes.length) { CityCab.toast('No driving route found between those points.', 'danger'); return false; }
+
+    const route = j.routes[0];
+    const km = route.distance / 1000;
+    const min = route.duration / 60;
+    const fare = Math.round(50 + km * 10);
+
+    if (routeLayer) map.removeLayer(routeLayer);
+    routeLayer = L.geoJSON(route.geometry, { style: { color: '#b06bff', weight: 5, opacity: 0.9 } }).addTo(map);
+    if (pickMarker) map.removeLayer(pickMarker);
+    if (dropMarker) map.removeLayer(dropMarker);
+    pickMarker = L.circleMarker([a.lat, a.lon], { radius: 8, color: '#34d399', fillColor: '#34d399', fillOpacity: 1 }).addTo(map);
+    dropMarker = L.circleMarker([b.lat, b.lon], { radius: 8, color: '#fb7185', fillColor: '#fb7185', fillOpacity: 1 }).addTo(map);
+    map.fitBounds(routeLayer.getBounds(), { padding: [45, 45] });
+
+    document.getElementById('distance-display').innerText = km.toFixed(1) + ' km';
+    document.getElementById('duration-display').innerText = Math.round(min) + ' min';
+    document.getElementById('fare-display').innerText = fare;
+    document.getElementById('distance_km').value = km.toFixed(2);
+    document.getElementById('duration_min').value = min.toFixed(2);
+    document.getElementById('fare').value = fare;
+    return true;
+  }
+
+  let estimating = false;
+  async function tryEstimate() {
+    if (estimating) return;
+    const o = document.getElementById('pickup').value.trim();
+    const d = document.getElementById('drop').value.trim();
+    if (!o || !d) return;
+    estimating = true;
+    try { await computeRoute(); } catch (e) {} finally { estimating = false; }
+  }
+  document.getElementById('pickup').addEventListener('blur', tryEstimate);
+  document.getElementById('drop').addEventListener('blur', tryEstimate);
+
+  document.getElementById('estimate-btn').addEventListener('click', async function () {
+    const overlay = document.getElementById('loading-overlay');
+    overlay.classList.add('show');
+    try { await computeRoute(); } finally { overlay.classList.remove('show'); }
+  });
+
+  async function bookRide() {
+    const missing = ['name', 'pickup', 'drop', 'date', 'time'].some(id => !document.getElementById(id).value);
+    if (missing) { CityCab.toast('Please fill in all fields.', 'warning'); return; }
+    if (new Date(document.getElementById('date').value) < new Date().setHours(0, 0, 0, 0)) { CityCab.toast('Please pick a future date.', 'warning'); return; }
+
+    const overlay = document.getElementById('loading-overlay');
+    if (!document.getElementById('distance_km').value) {
+      overlay.classList.add('show');
+      let ok = false;
+      try { ok = await computeRoute(); } catch (e) { ok = false; }
+      overlay.classList.remove('show');
+      if (!ok) return;
+    }
+
+    document.getElementById('confirmation-sound').play().catch(() => {});
+    document.getElementById('confirm-modal').classList.add('show');
+    setTimeout(() => { document.getElementById('future-form').submit(); }, 1100);
+  }
+  window.bookRide = bookRide;
+
+  window.addEventListener('DOMContentLoaded', () => {
+    document.getElementById('date').min = new Date().toISOString().split('T')[0];
+    initMap();
+  });
+</script>
+{% endblock %}

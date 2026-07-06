@@ -1,0 +1,126 @@
+{% set title = "Driver · CityCab" %}
+{% extends "base.html" %}
+
+{% block head_extra %}
+<style>
+  .rides-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 18px; }
+  .drive-card { display: flex; flex-direction: column; gap: 10px; }
+  .drive-route { font-family: var(--font-display); font-weight: 600; font-size: 16px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .drive-route .arrow { color: var(--ink-dim); }
+  .drive-meta { color: var(--ink-muted); font-size: 13.5px; display: flex; flex-direction: column; gap: 4px; }
+  .drive-fare { font-family: var(--font-display); font-weight: 700; font-size: 20px; color: var(--amber); }
+  .conn { display: inline-flex; align-items: center; gap: 7px; font-size: 13px; }
+  .conn .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ink-dim); }
+  .conn.online .dot { background: var(--success); box-shadow: 0 0 0 4px rgba(52,211,153,.18); }
+  .conn.offline .dot { background: var(--danger); }
+  .refresh-spin { animation: spin 1s linear infinite; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="fade-up flex-between" style="flex-wrap: wrap; gap: 12px;">
+  <div>
+    <span class="eyebrow">🚕 Driver</span>
+    <h1 class="title-xl mt-4">Available rides</h1>
+  </div>
+  <div class="flex gap-4" style="align-items:center;">
+    <span class="conn" id="conn"><span class="dot"></span><span id="conn-text">Connecting…</span></span>
+    <button class="btn btn-primary" id="refresh-btn">
+      <svg id="refresh-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36M21 3v6h-6"/></svg>
+      Refresh
+    </button>
+  </div>
+</div>
+
+<div id="rides-grid" class="rides-grid mt-6 fade-up"></div>
+
+<div id="empty" class="card mt-6 empty" style="display:none;">
+  <svg viewBox="0 0 24 24" fill="none" stroke="var(--accent-2)" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M8 12h8"/></svg>
+  <h3>No rides available</h3>
+  <p>New ride requests will appear here automatically.</p>
+</div>
+
+<!-- DETAILS MODAL -->
+<div class="modal" id="ride-modal">
+  <div class="modal-bg" onclick="closeModal()"></div>
+  <div class="card modal-card fade-up">
+    <h2 style="margin-bottom:16px;">Ride details</h2>
+    <div id="ride-details" class="stack" style="font-size:14.5px;"></div>
+    <button class="btn btn-ghost btn-block mt-5" onclick="closeModal()">Close</button>
+  </div>
+</div>
+{% endblock %}
+
+{% block script_extra %}
+<script>
+  const grid = document.getElementById('rides-grid');
+  const empty = document.getElementById('empty');
+  const conn = document.getElementById('conn');
+  const connText = document.getElementById('conn-text');
+  const refreshBtn = document.getElementById('refresh-btn');
+  const refreshIco = document.getElementById('refresh-ico');
+  const modal = document.getElementById('ride-modal');
+  const details = document.getElementById('ride-details');
+
+  function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m])); }
+
+  async function loadRides(manual) {
+    if (manual) refreshIco.classList.add('refresh-spin');
+    try {
+      const res = await fetch('/driver/rides');
+      if (!res.ok) throw new Error('fetch failed');
+      const rides = await res.json();
+
+      grid.innerHTML = rides.map(r => `
+        <div class="card card-hover drive-card">
+          <div class="drive-route"><span>${esc(r.pickup)}</span><span class="arrow">→</span><span>${esc(r.drop)}</span></div>
+          <div class="drive-meta">
+            <span>📍 ${esc(r.distance)} · ${esc(r.duration)}</span>
+            <span>👤 ${esc(r.customer || 'N/A')}</span>
+          </div>
+          <div class="drive-fare">₹${esc(r.fare)}</div>
+          <div class="flex gap-3" style="margin-top:6px;">
+            <button class="btn btn-primary" style="flex:1;" onclick="acceptRide(${r.id})">Accept</button>
+            <button class="btn btn-ghost" onclick='showDetails(${JSON.stringify(r)})'>Details</button>
+          </div>
+        </div>`).join('');
+
+      empty.style.display = rides.length ? 'none' : '';
+      conn.className = 'conn online'; connText.textContent = 'Connected';
+    } catch (e) {
+      conn.className = 'conn offline'; connText.textContent = 'Disconnected';
+    } finally {
+      if (manual) setTimeout(() => refreshIco.classList.remove('refresh-spin'), 600);
+    }
+  }
+
+  async function acceptRide(id) {
+    try {
+      const res = await fetch(`/driver/rides/${id}/accept`, { method: 'POST' });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Failed to accept ride');
+      CityCab.toast('Ride accepted!', 'success');
+      loadRides();
+    } catch (e) { CityCab.toast(e.message, 'danger'); }
+  }
+  window.acceptRide = acceptRide;
+
+  function showDetails(r) {
+    details.innerHTML = `
+      <div class="flex-between"><span class="text-dim">Pickup</span><span>${esc(r.pickup)}</span></div>
+      <div class="flex-between"><span class="text-dim">Drop-off</span><span>${esc(r.drop)}</span></div>
+      <div class="flex-between"><span class="text-dim">Distance</span><span>${esc(r.distance)}</span></div>
+      <div class="flex-between"><span class="text-dim">Duration</span><span>${esc(r.duration)}</span></div>
+      <div class="flex-between"><span class="text-dim">Passenger</span><span>${esc(r.customer || 'N/A')}</span></div>
+      <div class="flex-between"><span class="text-dim">Fare</span><span class="drive-fare" style="font-size:16px;">₹${esc(r.fare)}</span></div>`;
+    modal.classList.add('show');
+  }
+  window.showDetails = showDetails;
+  function closeModal() { modal.classList.remove('show'); }
+  window.closeModal = closeModal;
+
+  refreshBtn.addEventListener('click', () => loadRides(true));
+  setInterval(() => loadRides(false), 5000);
+  loadRides();
+</script>
+{% endblock %}

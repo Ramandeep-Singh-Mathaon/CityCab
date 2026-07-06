@@ -1,0 +1,22 @@
+{% set title = error or "Error · CityCab" %}
+{% extends "base.html" %}
+{% block navbar %}{% endblock %}
+
+{% block body %}
+<main class="center-screen">
+  <div class="card fade-up text-center" style="width:100%; max-width:480px;">
+    <svg viewBox="0 0 24 24" width="72" height="72" style="margin:0 auto 20px;" fill="none" stroke="#fb7185" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/>
+    </svg>
+    <h1 class="title-xl" style="font-size:26px;">{{ error or "Something went wrong" }}</h1>
+    <p class="subtitle" style="margin-top:8px;">You don't have access to this page, or it doesn't exist.</p>
+    <div class="flex gap-3 mt-6" style="justify-content:center;">
+      <a href="{{ url_for('book') }}" class="btn btn-primary">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12l2-2m0 0 7-7 7 7M5 10v10a1 1 0 0 0 1 1h3m10-11 2 2m-2-2v10a1 1 0 0 1-1 1h-3m-6 0h6"/></svg>
+        Go home
+      </a>
+      <a href="{{ url_for('login') }}" class="btn btn-ghost">Sign in</a>
+    </div>
+  </div>
+</main>
+{% endblock %}

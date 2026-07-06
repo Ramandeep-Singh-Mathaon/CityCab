@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 💬 Questions & Discussions
+    url: https://github.com/Ramandeep-Singh-Mathaon/CityCab/discussions
+    about: Ask questions, share ideas, and discuss CityCab here.
+  - name: 🔒 Report a security issue
+    url: https://github.com/Ramandeep-Singh-Mathaon/CityCab/security/advisories/new
+    about: Please report vulnerabilities privately, not as a public issue.
